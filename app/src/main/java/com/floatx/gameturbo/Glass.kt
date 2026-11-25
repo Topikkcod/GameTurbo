@@ -32,7 +32,7 @@ fun Glass(
     Box(
         modifier
             .clip(shape)
-            .let { m -> if (haze != null && !C.safe) m.hazeEffect(haze) { blurRadius = 24.dp } else m }
+            .let { m -> if (haze != null && !C.safe) m.hazeEffect(haze) { blurRadius = 24.dp; backgroundColor = Color(0xFF030814) } else m }
             .background(fill)
             .border(
                 1.dp,
