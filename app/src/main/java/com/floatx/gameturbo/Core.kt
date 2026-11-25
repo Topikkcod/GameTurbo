@@ -1,0 +1,154 @@
+package com.floatx.gameturbo
+
+import android.app.ActivityManager
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.graphics.drawable.toBitmap
+import rikka.shizuku.Shizuku
+
+val Themes = listOf(
+    Triple("Biru", Color(0xFF1E6BFF), Color(0xFF33C4FF)),
+    Triple("Ungu", Color(0xFF7B4DFF), Color(0xFFC084FC)),
+    Triple("Hijau", Color(0xFF10B981), Color(0xFF6EE7B7)),
+    Triple("Merah", Color(0xFFEF4444), Color(0xFFFB923C))
+)
+
+object C {
+    var themeIdx by mutableIntStateOf(0)
+    var wallIdx by mutableIntStateOf(0)
+    val Bg = Color(0xFF030814)
+    val Blue: Color get() = Themes[themeIdx].second
+    val Cyan: Color get() = Themes[themeIdx].third
+    val Text = Color(0xFFEAF4FF)
+    val Dim = Color(0xFF8DA6C9)
+    val Green = Color(0xFF34D399)
+    val Red = Color(0xFFFF5C6C)
+}
+
+/** Menjalankan perintah shell lewat Shizuku (hak akses shell). Panggil dari thread background. */
+object Shell {
+    fun ready(): Boolean = try {
+        Shizuku.pingBinder() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
+    } catch (e: Throwable) { false }
+
+    fun run(cmd: String): String = try {
+        val m = Shizuku::class.java.getDeclaredMethod(
+            "newProcess", Array<String>::class.java, Array<String>::class.java, String::class.java
+        )
+        m.isAccessible = true
+        val p = m.invoke(null, arrayOf("sh", "-c", cmd), null, null) as Process
+        val out = p.inputStream.bufferedReader().readText()
+        val err = p.errorStream.bufferedReader().readText()
+        p.waitFor()
+        (out + err).trim()
+    } catch (e: Throwable) { "ERR: ${e.message}" }
+}
+
+object Freeform {
+    /** Menyalakan dukungan freeform window di sistem (Android 16 mungkin perlu reboot sekali). */
+    fun enable(): String = Shell.run(
+        "settings put global enable_freeform_support 1; " +
+        "settings put global force_resizable_activities 1; " +
+        "settings put global freeform_window_management 1"
+    )
+
+    /** Buka app sebagai jendela mengambang (windowing mode 5 = freeform). */
+    fun launch(ctx: Context, pkg: String): String {
+        val comp = ctx.packageManager.getLaunchIntentForPackage(pkg)?.component ?: return "ERR: app tidak ditemukan"
+        return Shell.run("am start -n ${comp.flattenToShortString()} --windowingMode 5 --display 0")
+    }
+}
+
+/** Cara yang dipakai Taskbar/Mi-Freeform: mode windowing 5 (freeform) + bounds. Di sini lewat shell Shizuku. */
+fun Freeform.launchBounds(ctx: Context, pkg: String, r: android.graphics.Rect): Int {
+    val comp = ctx.packageManager.getLaunchIntentForPackage(pkg)?.component ?: return -1
+    Shell.run("am start -n ${comp.flattenToShortString()} --windowingMode 5 --display 0")
+    var id = -1
+    repeat(8) {
+        if (id < 0) {
+            Thread.sleep(300)
+            val lines = Shell.run("dumpsys activity activities | grep 'Task{'").lines().filter { it.contains(":$pkg") }
+            val line = lines.firstOrNull { it.contains("freeform") } ?: lines.firstOrNull()
+            id = line?.let { Regex("#(\\d+)").find(it)?.groupValues?.get(1)?.toIntOrNull() } ?: -1
+        }
+    }
+    if (id > 0) Shell.run("am task resize $id ${r.left},${r.top},${r.right},${r.bottom}")
+    return id
+}
+
+object Tools {
+    fun cleanMemory() = Shell.run("am kill-all")
+    fun dnd(on: Boolean) = Shell.run("cmd notification set_dnd " + if (on) "priority" else "off")
+    fun batterySaver(on: Boolean) = Shell.run("settings put global low_power " + if (on) 1 else 0)
+    fun screenshot() = Shell.run("screencap -p /sdcard/Pictures/GameTurbo_${System.currentTimeMillis()}.png")
+
+    fun recStart() = Shell.run("nohup screenrecord --time-limit 180 /sdcard/Movies/GameTurbo_${System.currentTimeMillis()}.mp4 >/dev/null 2>&1 &")
+    fun recStop() = Shell.run("pkill -2 screenrecord")
+    fun performance(on: Boolean) = Shell.run("cmd power set-fixed-performance-mode-enabled " + if (on) "true" else "false")
+    fun media(code: Int) = Shell.run("input keyevent $code")
+
+    fun ram(ctx: Context): String {
+        val mi = ActivityManager.MemoryInfo()
+        ctx.getSystemService(ActivityManager::class.java).getMemoryInfo(mi)
+        val gb = 1024.0 * 1024 * 1024
+        return "RAM %.1f GB / %.1f GB".format((mi.totalMem - mi.availMem) / gb, mi.totalMem / gb)
+    }
+}
+
+class Prefs(ctx: Context) {
+    private val sp = ctx.getSharedPreferences("gt", 0)
+    var favs: Set<String>
+        get() = sp.getStringSet("favs", emptySet())!!.toSet()
+        set(v) { sp.edit().putStringSet("favs", v).apply() }
+    var theme: Int
+        get() = sp.getInt("theme", 0)
+        set(v) { sp.edit().putInt("theme", v).apply() }
+    var wall: Int
+        get() = sp.getInt("wall", 0)
+        set(v) { sp.edit().putInt("wall", v).apply() }
+    var video: String
+        get() = sp.getString("video", "")!!
+        set(v) { sp.edit().putString("video", v).apply() }
+    var xhStyle: Int
+        get() = sp.getInt("xhs", 1)
+        set(v) { sp.edit().putInt("xhs", v).apply() }
+    var xhColor: Int
+        get() = sp.getInt("xhc", 0)
+        set(v) { sp.edit().putInt("xhc", v).apply() }
+    var xhSize: Int
+        get() = sp.getInt("xhz", 48)
+        set(v) { sp.edit().putInt("xhz", v).apply() }
+    var winSize: Int
+        get() = sp.getInt("wsz", 1)
+        set(v) { sp.edit().putInt("wsz", v).apply() }
+    var note: String
+        get() = sp.getString("note", "")!!
+        set(v) { sp.edit().putString("note", v).apply() }
+}
+
+class AppItem(val pkg: String, val label: String, val icon: ImageBitmap, val game: Boolean = false)
+
+object Apps {
+    fun load(ctx: Context): List<AppItem> {
+        val pm = ctx.packageManager
+        val i = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        return pm.queryIntentActivities(i, 0)
+            .map {
+                val ai = it.activityInfo.applicationInfo
+                @Suppress("DEPRECATION")
+                val game = (ai.flags and android.content.pm.ApplicationInfo.FLAG_IS_GAME) != 0 ||
+                    ai.category == android.content.pm.ApplicationInfo.CATEGORY_GAME
+                AppItem(it.activityInfo.packageName, it.loadLabel(pm).toString(), it.loadIcon(pm).toBitmap(96, 96).asImageBitmap(), game)
+            }
+            .filter { it.pkg != ctx.packageName }
+            .distinctBy { it.pkg }
+            .sortedBy { it.label.lowercase() }
+    }
+}
