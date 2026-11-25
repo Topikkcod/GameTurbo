@@ -33,6 +33,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -55,21 +57,35 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val pf = Prefs(this)
+        val boot = java.io.File(filesDir, "boot")
+        if (boot.exists()) pf.safe = true   // start sebelumnya tidak selesai -> mode aman
+        C.safe = pf.safe
+        val crashFile = java.io.File(filesDir, "crash.txt")
+        if (crashFile.exists()) {
+            val txt = runCatching { crashFile.readText() }.getOrDefault("(tidak bisa membaca log)")
+            setContent { CrashScreen(txt) { crashFile.delete(); recreate() } }
+            return
+        }
         if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
-        setContent { App() }
+        boot.writeText("1")
+        GTApp.startWatchdog(this)
+        setContent { App { boot.delete() } }
     }
 }
 
 @Composable
-fun App() {
+fun App(onStable: () -> Unit = {}) {
     val ctx = LocalContext.current
     val haze = remember { HazeState() }
     var tab by remember { mutableIntStateOf(0) }
-    var intro by remember { mutableStateOf(true) }
-    remember { val pf = Prefs(ctx); C.themeIdx = pf.theme; C.wallIdx = pf.wall; 0 }
+    var intro by remember { mutableStateOf(!C.safe) }
+    var gate by remember { mutableStateOf(!C.safe && !DataPack.ready(ctx) && BuildConfig.DATA_URL.isNotEmpty()) }
+    remember { val pf = Prefs(ctx); C.extraThemes = DataPack.themes(ctx); C.themeIdx = pf.theme; C.wallIdx = pf.wall; 0 }
     var shizuku by remember { mutableStateOf(false) }
     var overlay by remember { mutableStateOf(false) }
     var ram by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) { GTApp.markDrawn(ctx); delay(4000); onStable() }
     LaunchedEffect(Unit) {
         while (true) {
             shizuku = Shell.ready()
@@ -79,7 +95,7 @@ fun App() {
         }
     }
     Box(Modifier.fillMaxSize().background(C.Bg)) {
-        Box(Modifier.fillMaxSize().hazeSource(haze)) { Backdrop() }
+        Box(Modifier.fillMaxSize().let { if (C.safe) it else it.hazeSource(haze) }) { Backdrop() }
         Column(Modifier.fillMaxSize().systemBarsPadding()) {
             Row(Modifier.padding(16.dp, 12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Image(painterResource(R.drawable.logo), null, Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)))
@@ -96,6 +112,7 @@ fun App() {
                     )
                 }
             }
+            if (C.safe) SafeBanner()
             Box(Modifier.weight(1f)) {
                 when (tab) {
                     0 -> TurboScreen(haze, shizuku, ram)
@@ -116,6 +133,7 @@ fun App() {
             }
         }
         if (intro) IntroScreen { intro = false }
+        else if (gate) DataScreen { gate = false; C.extraThemes = DataPack.themes(ctx); C.themeIdx = Prefs(ctx).theme }
     }
 }
 
@@ -134,9 +152,20 @@ fun NavItem(icon: ImageVector, label: String, selected: Boolean, onClick: () -> 
 
 @Composable
 fun Backdrop() {
+    val ctx = LocalContext.current
+    val wall by produceState<ImageBitmap?>(null, C.wallIdx) {
+        value = if (C.safe) null else withContext(Dispatchers.IO) {
+            DataPack.walls(ctx).getOrNull(C.wallIdx - 1)?.let { f ->
+                runCatching {
+                    android.graphics.BitmapFactory.decodeFile(f.path, android.graphics.BitmapFactory.Options().apply { inSampleSize = 2 })?.asImageBitmap()
+                }.getOrNull()
+            }
+        }
+    }
     Box(Modifier.fillMaxSize()) {
-        if (C.wallIdx in 1..Walls.size) {
-            Image(painterResource(Walls[C.wallIdx - 1]), null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
+        val w = wall
+        if (C.wallIdx > 0 && w != null) {
+            Image(w, null, Modifier.fillMaxSize(), contentScale = androidx.compose.ui.layout.ContentScale.Crop)
             Box(Modifier.fillMaxSize().background(Color(0x77020510)))
         } else {
             Canvas(Modifier.fillMaxSize()) {
@@ -188,7 +217,7 @@ fun TurboScreen(haze: HazeState, shizuku: Boolean, ram: String) {
                 Box(
                     Modifier.size(150.dp).clip(CircleShape).clickable {
                         if (!shizuku) msg = "Aktifkan Shizuku dulu (tab Jendela)"
-                        else { msg = "Mengoptimalkan..."; scope.launch(Dispatchers.IO) { Tools.cleanMemory(); msg = "Performa dioptimalkan. Memori latar dibersihkan." } }
+                        else { msg = "Mengoptimalkan..."; scope.launch(Dispatchers.IO) { Tools.cleanMemory(); msg = "Performa dioptimalkan. Memori latar dibersihkan."; SoundFx.playTool(ctx) } }
                     },
                     contentAlignment = Alignment.Center
                 ) {
@@ -236,7 +265,7 @@ fun TurboScreen(haze: HazeState, shizuku: Boolean, ram: String) {
             if (!shizuku) msg = "Aktifkan Shizuku dulu (tab Jendela)"
             else {
                 mode = 2; dnd = true; msg = "Mode bermain aktif: memori dibersihkan, DND, performa, monitor."
-                scope.launch(Dispatchers.IO) { Tools.cleanMemory(); Tools.dnd(true); Tools.performance(true) }
+                scope.launch(Dispatchers.IO) { Tools.cleanMemory(); Tools.dnd(true); Tools.performance(true); SoundFx.playTool(ctx) }
                 ctx.startForegroundService(Intent(ctx, OverlayService::class.java).setAction("hud_on"))
             }
         }

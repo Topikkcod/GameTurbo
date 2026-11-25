@@ -3,6 +3,8 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+val dataUrl = (project.findProperty("dataUrl") as String?) ?: ""
+
 android {
     namespace = "com.floatx.gameturbo"
     compileSdk = 35
@@ -10,10 +12,14 @@ android {
         applicationId = "com.floatx.gameturbo"
         minSdk = 29
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.3.0"
+        versionCode = 8
+        versionName = "1.5.1"
+        buildConfigField("String", "DATA_URL", "\"$dataUrl\"")
     }
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

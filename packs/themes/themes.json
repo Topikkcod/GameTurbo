@@ -1,0 +1,52 @@
+[
+ {
+  "name": "Cyberpunk",
+  "a": "#FF2E97",
+  "b": "#00E5FF"
+ },
+ {
+  "name": "Matrix",
+  "a": "#00A844",
+  "b": "#7CFFB2"
+ },
+ {
+  "name": "Sunset",
+  "a": "#FF6B35",
+  "b": "#FFC857"
+ },
+ {
+  "name": "Sakura",
+  "a": "#FF5FA2",
+  "b": "#FFB3D1"
+ },
+ {
+  "name": "Es",
+  "a": "#3B82F6",
+  "b": "#A5F3FC"
+ },
+ {
+  "name": "Emas",
+  "a": "#D4A017",
+  "b": "#FFE08A"
+ },
+ {
+  "name": "Magma",
+  "a": "#DC2626",
+  "b": "#F97316"
+ },
+ {
+  "name": "Toxic",
+  "a": "#84CC16",
+  "b": "#22D3EE"
+ },
+ {
+  "name": "Monokrom",
+  "a": "#64748B",
+  "b": "#E2E8F0"
+ },
+ {
+  "name": "Royal",
+  "a": "#6D28D9",
+  "b": "#F0ABFC"
+ }
+]

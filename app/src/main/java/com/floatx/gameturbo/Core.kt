@@ -13,7 +13,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
 import rikka.shizuku.Shizuku
 
-val Themes = listOf(
+val BuiltinThemes = listOf(
     Triple("Biru", Color(0xFF1E6BFF), Color(0xFF33C4FF)),
     Triple("Ungu", Color(0xFF7B4DFF), Color(0xFFC084FC)),
     Triple("Hijau", Color(0xFF10B981), Color(0xFF6EE7B7)),
@@ -21,11 +21,14 @@ val Themes = listOf(
 )
 
 object C {
+    var extraThemes by androidx.compose.runtime.mutableStateOf<List<Triple<String, Color, Color>>>(emptyList())
+    val all: List<Triple<String, Color, Color>> get() = BuiltinThemes + extraThemes
+    var safe by androidx.compose.runtime.mutableStateOf(false)
     var themeIdx by mutableIntStateOf(0)
     var wallIdx by mutableIntStateOf(0)
     val Bg = Color(0xFF030814)
-    val Blue: Color get() = Themes[themeIdx].second
-    val Cyan: Color get() = Themes[themeIdx].third
+    val Blue: Color get() = all.getOrElse(themeIdx) { BuiltinThemes[0] }.second
+    val Cyan: Color get() = all.getOrElse(themeIdx) { BuiltinThemes[0] }.third
     val Text = Color(0xFFEAF4FF)
     val Dim = Color(0xFF8DA6C9)
     val Green = Color(0xFF34D399)
@@ -128,6 +131,15 @@ class Prefs(ctx: Context) {
     var winSize: Int
         get() = sp.getInt("wsz", 1)
         set(v) { sp.edit().putInt("wsz", v).apply() }
+    var introSound: String
+        get() = sp.getString("isnd", "")!!
+        set(v) { sp.edit().putString("isnd", v).apply() }
+    var toolSound: String
+        get() = sp.getString("tsnd", "")!!
+        set(v) { sp.edit().putString("tsnd", v).apply() }
+    var safe: Boolean
+        get() = sp.getBoolean("safe", false)
+        set(v) { sp.edit().putBoolean("safe", v).apply() }
     var note: String
         get() = sp.getString("note", "")!!
         set(v) { sp.edit().putString("note", v).apply() }
@@ -136,7 +148,9 @@ class Prefs(ctx: Context) {
 class AppItem(val pkg: String, val label: String, val icon: ImageBitmap, val game: Boolean = false)
 
 object Apps {
-    fun load(ctx: Context): List<AppItem> {
+    fun load(ctx: Context): List<AppItem> = try { loadInner(ctx) } catch (e: Throwable) { emptyList() }
+
+    private fun loadInner(ctx: Context): List<AppItem> {
         val pm = ctx.packageManager
         val i = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         return pm.queryIntentActivities(i, 0)
@@ -151,4 +165,21 @@ object Apps {
             .distinctBy { it.pkg }
             .sortedBy { it.label.lowercase() }
     }
+}
+
+/** Memutar file suara dari paket data. */
+object SoundFx {
+    fun play(f: java.io.File): Boolean {
+        if (!f.exists()) return false
+        return try {
+            val mp = android.media.MediaPlayer()
+            mp.setDataSource(f.path)
+            mp.setOnCompletionListener { it.release() }
+            mp.setOnErrorListener { m, _, _ -> m.release(); true }
+            mp.prepare(); mp.start(); true
+        } catch (e: Throwable) { false }
+    }
+    fun file(ctx: Context, name: String) = java.io.File(java.io.File(DataPack.dir(ctx), "sounds"), name)
+    fun playTool(ctx: Context) { val n = Prefs(ctx).toolSound; if (n.isNotEmpty()) play(file(ctx, n)) }
+    fun label(f: java.io.File) = f.nameWithoutExtension.substringAfter('_').replace('-', ' ').replaceFirstChar { it.uppercase() }
 }

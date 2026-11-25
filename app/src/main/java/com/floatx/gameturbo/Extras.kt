@@ -56,12 +56,12 @@ import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import androidx.compose.ui.graphics.asImageBitmap
 import kotlin.math.exp
 import kotlin.math.pow
 import kotlin.math.roundToInt
 
-val Walls = intArrayOf(R.drawable.w1, R.drawable.w2, R.drawable.w3, R.drawable.w4, R.drawable.w5, R.drawable.w6, R.drawable.w7, R.drawable.w8)
-val Thumbs = intArrayOf(R.drawable.t1, R.drawable.t2, R.drawable.t3, R.drawable.t4, R.drawable.t5, R.drawable.t6, R.drawable.t7, R.drawable.t8)
 val XhColors = listOf(Color(0xFFFF3B3B), Color(0xFF39FF88), Color(0xFF33C4FF), Color.White, Color(0xFFFFE04A))
 val XhStyles = listOf("Titik", "Plus", "Lingkaran", "Siku")
 
@@ -133,6 +133,8 @@ object IntroFx {
 
     fun impact(ctx: Context) {
         try { ctx.getSystemService(Vibrator::class.java)?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 60, 30, 140), -1)) } catch (e: Throwable) { }
+        val pf = Prefs(ctx).introSound
+        if (pf.isNotEmpty() && SoundFx.play(SoundFx.file(ctx, pf))) return
         val tt = 0.9; val rr = Random(1)
         play(buf(1.7f) { t ->
             val boom = if (t < tt) Math.sin(2 * Math.PI * (150 * tt / Math.log(36.0 / 150.0)) * (Math.pow(36.0 / 150.0, t / tt) - 1)) * Math.exp(-t * 4.5) * 0.9 else 0.0
@@ -256,6 +258,11 @@ fun SettingsScreen(haze: HazeState, shizuku: Boolean) {
     var xhColor by remember { mutableIntStateOf(prefs.xhColor) }
     var xhSize by remember { mutableFloatStateOf(prefs.xhSize.toFloat()) }
     var winSize by remember { mutableIntStateOf(prefs.winSize) }
+    var walls by remember { mutableStateOf(DataPack.walls(ctx)) }
+    var dlMsg by remember { mutableStateOf("") }
+    var sounds by remember { mutableStateOf(DataPack.sounds(ctx)) }
+    var introSnd by remember { mutableStateOf(prefs.introSound) }
+    var toolSnd by remember { mutableStateOf(prefs.toolSound) }
     var msg by remember { mutableStateOf("") }
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -270,6 +277,14 @@ fun SettingsScreen(haze: HazeState, shizuku: Boolean) {
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Glass(Modifier.fillMaxWidth(), haze) {
+            Section("Mode aman") {
+                Chip(if (C.safe) "Mode aman AKTIF (ketuk untuk matikan)" else "Aktifkan mode aman", C.safe) {
+                    val v = !C.safe; prefs.safe = v; C.safe = v; (ctx as? android.app.Activity)?.recreate()
+                }
+                Text("Mematikan intro, efek kaca/blur, dan unduhan data supaya app lebih ringan. Aktif otomatis kalau app macet saat dibuka.", color = C.Dim, fontSize = 12.sp)
+            }
+        }
+        Glass(Modifier.fillMaxWidth(), haze) {
             Section("Monitor FPS, CPU, GPU, Ping, Suhu") {
                 Chip(if (hud) "Matikan Monitor" else "Nyalakan Monitor", hud) { hud = !hud; svc(if (hud) "hud_on" else "hud_off") }
                 Text("FPS dibaca dari SurfaceFlinger via Shizuku. GPU tampil sebagai frekuensi. Nilai '--' berarti HP tidak mengizinkan.", color = C.Dim, fontSize = 12.sp)
@@ -277,8 +292,8 @@ fun SettingsScreen(haze: HazeState, shizuku: Boolean) {
         }
         Glass(Modifier.fillMaxWidth(), haze) {
             Section("Tema warna") {
-                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Themes.forEachIndexed { i, (name, b, c) ->
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    C.all.forEachIndexed { i, (name, b, c) ->
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Box(
                                 Modifier.size(46.dp).clip(CircleShape).background(Brush.linearGradient(listOf(b, c)))
@@ -300,22 +315,47 @@ fun SettingsScreen(haze: HazeState, shizuku: Boolean) {
                             .clickable { C.wallIdx = 0; prefs.wall = 0 },
                         contentAlignment = Alignment.Center
                     ) { Text("Default", color = C.Text, fontSize = 11.sp) }
-                    Thumbs.forEachIndexed { i, id ->
-                        Image(
-                            painterResource(id), null,
+                    walls.forEachIndexed { i, f ->
+                        FileImage(
+                            DataPack.thumb(f), 1,
                             Modifier.size(62.dp, 110.dp).clip(RoundedCornerShape(10.dp))
                                 .border(if (C.wallIdx == i + 1) 2.dp else 0.dp, Color.White, RoundedCornerShape(10.dp))
-                                .clickable { C.wallIdx = i + 1; prefs.wall = i + 1 },
-                            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                                .clickable { C.wallIdx = i + 1; prefs.wall = i + 1 }
                         )
                     }
                 }
+                if (walls.isEmpty()) Text("Wallpaper belum diunduh. Buka bagian Paket data di bawah.", color = C.Dim, fontSize = 12.sp)
                 Chip("Pasang di layar HP", false) {
-                    if (C.wallIdx in 1..Walls.size) scope.launch(Dispatchers.IO) {
-                        runCatching { WallpaperManager.getInstance(ctx).setResource(Walls[C.wallIdx - 1]) }
+                    if (C.wallIdx in 1..walls.size) scope.launch(Dispatchers.IO) {
+                        runCatching { java.io.FileInputStream(walls[C.wallIdx - 1]).use { WallpaperManager.getInstance(ctx).setStream(it) } }
                             .onSuccess { msg = "Wallpaper terpasang." }.onFailure { msg = "Gagal: ${it.message}" }
                     } else msg = "Pilih wallpaper dulu."
                 }
+            }
+        }
+        Glass(Modifier.fillMaxWidth(), haze) {
+            Section("Suara") {
+                if (sounds.isEmpty()) Text("Belum ada suara. Unduh paket data dulu.", color = C.Dim, fontSize = 12.sp)
+                sounds.forEach { f ->
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(SoundFx.label(f), color = C.Text, fontSize = 13.sp, modifier = Modifier.weight(1f), maxLines = 1)
+                        Chip("Putar", false) { scope.launch(Dispatchers.IO) { SoundFx.play(f) } }
+                        Chip("Intro", introSnd == f.name) { introSnd = if (introSnd == f.name) "" else f.name; prefs.introSound = introSnd }
+                        Chip("Aksi", toolSnd == f.name) { toolSnd = if (toolSnd == f.name) "" else f.name; prefs.toolSound = toolSnd }
+                    }
+                }
+                Text("Intro = suara dentuman saat logo muncul. Aksi = suara saat Optimalkan atau Mulai bermain selesai.", color = C.Dim, fontSize = 12.sp)
+            }
+        }
+        Glass(Modifier.fillMaxWidth(), haze) {
+            Section("Paket data") {
+                Text(if (walls.isNotEmpty()) "Terpasang: ${walls.size} wallpaper, ${C.extraThemes.size} tema, ${sounds.size} suara" else "Belum diunduh", color = C.Text, fontSize = 13.sp)
+                Chip(if (walls.isNotEmpty()) "Perbarui paket data" else "Unduh paket data", false) {
+                    dlMsg = "Mengunduh..."
+                    scope.launch { val r = DataPack.download(ctx) { }; dlMsg = r ?: "Selesai."; walls = DataPack.walls(ctx); sounds = DataPack.sounds(ctx); C.extraThemes = DataPack.themes(ctx) }
+                }
+                if (dlMsg.isNotEmpty()) Text(dlMsg, color = C.Cyan, fontSize = 12.sp)
+                Text("Data diunduh ke HP ini dari GitHub Release (perlu internet).", color = C.Dim, fontSize = 12.sp)
             }
         }
         Glass(Modifier.fillMaxWidth(), haze) {
@@ -367,5 +407,80 @@ fun SettingsScreen(haze: HazeState, shizuku: Boolean) {
                 Text("Game Turbo 1.3.0. Shizuku: " + if (shizuku) "aktif" else "mati", color = C.Dim, fontSize = 12.sp)
             }
         }
+    }
+}
+
+@Composable
+fun CrashScreen(text: String, onContinue: () -> Unit) {
+    val clip = androidx.compose.ui.platform.LocalClipboardManager.current
+    Column(Modifier.fillMaxSize().background(C.Bg).systemBarsPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Game Turbo mengalami error", color = C.Red, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text("Tekan Salin lalu kirim teks ini ke Claude supaya bisa diperbaiki.", color = C.Dim, fontSize = 13.sp)
+        androidx.compose.foundation.text.selection.SelectionContainer(Modifier.weight(1f)) {
+            Text(text.take(6000), color = C.Text, fontSize = 11.sp, modifier = Modifier.verticalScroll(rememberScrollState()))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).background(C.Blue).clickable { clip.setText(androidx.compose.ui.text.AnnotatedString(text)) }.padding(14.dp), contentAlignment = Alignment.Center) { Text("Salin", color = Color.White) }
+            Box(Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).background(Color(0x33FFFFFF)).clickable { onContinue() }.padding(14.dp), contentAlignment = Alignment.Center) { Text("Coba buka lagi", color = C.Text) }
+        }
+    }
+}
+
+/** Memuat gambar dari file dengan ukuran diperkecil (hemat memori). */
+@Composable
+fun FileImage(file: java.io.File, sample: Int, modifier: Modifier) {
+    val bmp by produceState<ImageBitmap?>(null, file.path) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                android.graphics.BitmapFactory.decodeFile(file.path, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })?.asImageBitmap()
+            }.getOrNull()
+        }
+    }
+    bmp?.let { Image(it, null, modifier, contentScale = androidx.compose.ui.layout.ContentScale.Crop) } ?: Box(modifier.background(Color(0x22FFFFFF)))
+}
+
+/** Layar "menyiapkan data" saat pertama kali dibuka: mengunduh paket data ke HP. */
+@Composable
+fun DataScreen(onDone: () -> Unit) {
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var progress by remember { mutableFloatStateOf(0f) }
+    var status by remember { mutableStateOf("Mengunduh paket data...") }
+    var error by remember { mutableStateOf(false) }
+    fun start() {
+        error = false; status = "Mengunduh paket data..."
+        scope.launch { val r = DataPack.download(ctx) { progress = it }; if (r == null) onDone() else { error = true; status = r } }
+    }
+    LaunchedEffect(Unit) { start() }
+    Column(
+        Modifier.fillMaxSize().background(C.Bg).systemBarsPadding().padding(28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center
+    ) {
+        Image(painterResource(R.drawable.logo), null, Modifier.size(96.dp).clip(RoundedCornerShape(22.dp)))
+        Spacer(Modifier.height(20.dp))
+        Text("Menyiapkan data", color = C.Text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text("Pertama kali dibuka, Game Turbo mengunduh wallpaper dan paket tema ke HP ini. Sebaiknya pakai WiFi.", color = C.Dim, fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
+        Spacer(Modifier.height(24.dp))
+        Box(Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)).background(Color(0x33FFFFFF))) {
+            Box(Modifier.fillMaxHeight().fillMaxWidth(progress.coerceIn(0f, 1f)).background(Brush.horizontalGradient(listOf(C.Blue, C.Cyan))))
+        }
+        Text(status, color = if (error) C.Red else C.Cyan, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        Spacer(Modifier.height(20.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (error) Chip("Coba lagi", true) { start() }
+            Chip("Lewati dulu", false) { onDone() }
+        }
+    }
+}
+
+@Composable
+fun SafeBanner() {
+    val ctx = LocalContext.current
+    Row(
+        Modifier.fillMaxWidth().padding(16.dp, 0.dp, 16.dp, 6.dp).clip(RoundedCornerShape(12.dp)).background(Color(0x33FFC857)).padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text("Mode aman aktif: intro dan efek kaca dimatikan.", color = Color(0xFFFFC857), fontSize = 12.sp, modifier = Modifier.weight(1f))
+        Chip("Coba normal", false) { Prefs(ctx).safe = false; C.safe = false; (ctx as? android.app.Activity)?.recreate() }
     }
 }
