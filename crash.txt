@@ -1,0 +1,32 @@
+--------- beginning of main
+11-25 13:14:43.461 20387 20387 I ImeTracker: system_server:892afedf: onCancelled at PHASE_CLIENT_ON_CONTROLS_CHANGED
+11-25 13:14:43.872 20387 20408 I HWUI    : [setStopped] CanvasContext will be destroyed.
+11-25 13:14:43.885 20387 20408 I HWUI    : [destroy] CanvasContext will be destroyed.
+11-25 13:14:43.890 20387 20387 I ImeTracker: system_server:6fa6dcea: onCancelled at PHASE_CLIENT_ON_CONTROLS_CHANGED
+11-25 13:14:43.894 20387 20387 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=false callback=android.view.ImeBackAnimationController@d9484ab
+11-25 13:14:57.374 20387 24411 I Codec2-HalSelection: selection: hidl
+11-25 13:14:57.376 20387 24411 I CCodec  : setting up 'default' as default (vendor) store
+11-25 13:14:57.384 20387 24411 I CCodec  : Created component [c2.android.vorbis.decoder] for [c2.android.vorbis.decoder]
+11-25 13:14:57.389 20387 24411 I CCodecConfig: query failed after returning 8 values (BAD_INDEX)
+11-25 13:14:57.391 20387 24407 E MediaCodec: Media Quality Service not found.
+11-25 13:14:57.393 20387 24411 W Codec2Client: query -- param skipped: index = 1107298332.
+11-25 13:14:57.393 20387 24411 I CCodecConfig: query failed after returning 8 values (BAD_INDEX)
+11-25 13:14:57.393 20387 24411 E com.termux: Failed to query component interface for required system resources: 6
+11-25 13:14:57.393 20387 24411 W AString : ctor got NULL, using empty string instead
+11-25 13:14:57.394 20387 24411 W Codec2Client: query -- param skipped: index = 1342179345.
+11-25 13:14:57.394 20387 24411 W Codec2Client: query -- param skipped: index = 2415921170.
+11-25 13:14:57.396 20387 24411 I CCodecBufferChannel: [c2.android.vorbis.decoder#712] Created output block pool with allocatorID 16 => poolID 991 - OK
+11-25 13:14:57.401 20387 20387 W Choreographer: Already have a pending vsync event.  There should only be one at a time.
+11-25 13:14:57.419 20387 24411 I Codec2-HalSelection: selection: hidl
+11-25 13:14:57.421 20387 24414 I Codec2-HalSelection: selection: hidl
+11-25 13:14:57.421 20387 24411 I hw-BpHwBinder: onLastStrongRef automatically unlinking death recipients
+11-25 13:14:57.429 20387 20387 E ImeBackDispatcher: Ime callback not found. Ignoring unregisterReceivedCallback. callbackId: 131353999
+11-25 13:14:57.441 20387 20387 I ImeTracker: com.termux:813a5c56: onCancelled at PHASE_CLIENT_REPORT_REQUESTED_VISIBLE_TYPES
+11-25 13:14:57.537 20387 20387 I ImeTracker: system_server:8c45cef2: onShown
+11-25 13:14:57.662 20387 20387 I ImeTracker: com.termux:650c6624: onRequestShow at ORIGIN_CLIENT reason SHOW_SOFT_INPUT fromUser false
+11-25 13:14:57.663 20387 20387 I ImeTracker: com.termux:650c6624: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+11-25 13:14:59.877 24424 24424 W bash    : type=1400 audit(0.0:745087): avc:  granted  { execute } for  name="logcat" dev="dm-51" ino=598978 scontext=u:r:untrusted_app_27:s0:c61,c257,c512,c768 tcontext=u:object_r:app_data_file:s0:c61,c257,c512,c768 tclass=file app=com.termux.api
+11-25 13:14:59.877 24424 24424 W bash    : type=1400 audit(0.0:745088): avc:  granted  { execute } for  name="dash" dev="dm-51" ino=957193 scontext=u:r:untrusted_app_27:s0:c61,c257,c512,c768 tcontext=u:object_r:app_data_file:s0:c61,c257,c512,c768 tclass=file app=com.termux.api
+11-25 13:14:59.877 24424 24424 W bash    : type=1400 audit(0.0:745089): avc:  granted  { execute_no_trans } for  path="/data/data/com.termux/files/usr/bin/dash" dev="dm-51" ino=957193 scontext=u:r:untrusted_app_27:s0:c61,c257,c512,c768 tcontext=u:object_r:app_data_file:s0:c61,c257,c512,c768 tclass=file app=com.termux.api
+11-25 13:14:59.877 24424 24424 W sh      : type=1400 audit(0.0:745090): avc:  granted  { execute } for  path="/data/data/com.termux/files/usr/bin/dash" dev="dm-51" ino=957193 scontext=u:r:untrusted_app_27:s0:c61,c257,c512,c768 tcontext=u:object_r:app_data_file:s0:c61,c257,c512,c768 tclass=file app=com.termux.api
+11-25 13:14:59.881 24424 24424 W sh      : type=1400 audit(0.0:745091): avc:  denied  { search } for  name="tests" dev="dm-51" ino=110 scontext=u:r:untrusted_app_27:s0:c61,c257,c512,c768 tcontext=u:object_r:shell_test_data_file:s0 tclass=dir permissive=0 app=com.termux.api

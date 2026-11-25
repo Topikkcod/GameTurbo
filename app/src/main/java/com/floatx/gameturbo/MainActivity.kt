@@ -65,7 +65,7 @@ fun App() {
     val ctx = LocalContext.current
     val haze = remember { HazeState() }
     var tab by remember { mutableIntStateOf(0) }
-    var intro by remember { mutableStateOf(false) }
+    var intro by remember { mutableStateOf(true) }
     remember { val pf = Prefs(ctx); C.themeIdx = pf.theme; C.wallIdx = pf.wall; 0 }
     var shizuku by remember { mutableStateOf(false) }
     var overlay by remember { mutableStateOf(false) }
