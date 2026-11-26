@@ -93,12 +93,24 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner, ViewM
         var handleLp: WindowManager.LayoutParams? = null
     }
     private val wins = mutableListOf<WinState>()
+    private lateinit var engine: FloatEngine
     private val winList = mutableStateOf<List<Pair<Int, String>>>(emptyList())
     private val dn get() = resources.displayMetrics.density
     private fun publish() { winList.value = wins.map { it.id to it.label } }
 
+    private fun scrMetrics() = android.util.DisplayMetrics().also { m ->
+        val p = android.graphics.Point()
+        getSystemService(android.hardware.display.DisplayManager::class.java).getDisplay(0).getRealSize(p)
+        m.widthPixels = p.x; m.heightPixels = p.y
+    }
+
+    /** Mesin overlay (layar virtual) jadi bawaan; freeform Android jadi cadangan. */
+    private fun openApp(pkg: String, label: String) {
+        if (Prefs(this).engine == 0) main.post { engine.openApp(pkg, label) } else openWindow(pkg, label)
+    }
+
     private fun openWindow(pkg: String, label: String) = scope.launch {
-        val dm = resources.displayMetrics
+        val dm = scrMetrics()
         val f = floatArrayOf(0.58f, 0.74f, 0.92f)[Prefs(this@OverlayService).winSize.coerceIn(0, 2)]
         val w = (dm.widthPixels * f).toInt()
         val h = (dm.heightPixels * f * 0.7f).toInt()
@@ -150,11 +162,11 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner, ViewM
 
     private fun applyBounds(ws: WinState) {
         val r = android.graphics.Rect(ws.rect)
-        scope.launch { Shell.run("am task resize ${ws.id} ${r.left},${r.top},${r.right},${r.bottom}") }
+        scope.launch { val o = Freeform.resize(ws.id, r); if (o.isNotBlank()) toast(o.take(120)) }
     }
 
     private fun setMode(ws: WinState, m: Int) {
-        val dm = resources.displayMetrics
+        val dm = scrMetrics()
         val target = when {
             ws.mode == m -> ws.normal
             m == 2 -> android.graphics.Rect(0, (40 * dn).toInt(), dm.widthPixels, dm.heightPixels)
@@ -240,6 +252,7 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner, ViewM
         startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
 
         wm = getSystemService(WindowManager::class.java)
+        engine = FloatEngine(this, wm, scope, main, { v -> owners(v) }, { t -> toast(t) })
         lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -251,16 +264,18 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner, ViewM
             setContent {
                 OverlayUI(
                     favs = favs.value,
-                    winItems = winList.value,
-                    onCloseWin = { id -> main.post { wins.firstOrNull { it.id == id }?.let { closeWin(it) } } },
+                    winItems = winList.value + engine.items.value.map { it.first to (if (it.third) "(bola) " + it.second else it.second) },
+                    onCloseWin = { id -> main.post { if (id < 0) engine.closeById(id) else wins.firstOrNull { it.id == id }?.let { closeWin(it) } } },
                     onOpen = { refreshFavs() },
                     onDrag = { dx, dy -> lp.x += dx.toInt(); lp.y += dy.toInt(); wm.updateViewLayout(root, lp) },
-                    onLaunch = { pkg, label -> openWindow(pkg, label) },
+                    onLaunch = { pkg, label -> openApp(pkg, label) },
                     onTool = { t ->
                         when (t) {
                             "hud" -> main.post { toggleHud() }
                             "xh" -> main.post { showXh(null) }
                             "clk" -> main.post { showClock(null) }
+                            "browser" -> main.post { engine.openBrowser() }
+                            "split" -> main.post { engine.split() }
                             else -> scope.launch { toast(runTool(t)) }
                         }
                     },
@@ -292,7 +307,7 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner, ViewM
 
     override fun onStartCommand(i: Intent?, f: Int, id: Int): Int {
         when (i?.action) {
-            "open" -> openWindow(i.getStringExtra("pkg") ?: "", i.getStringExtra("label") ?: "")
+            "open" -> openApp(i.getStringExtra("pkg") ?: "", i.getStringExtra("label") ?: "")
             "hud_on" -> toggleHud(true)
             "hud_off" -> toggleHud(false)
             "hud_toggle" -> toggleHud()
@@ -306,6 +321,7 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner, ViewM
     override fun onBind(i: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        if (::engine.isInitialized) engine.destroyAll()
         toggleHud(false)
         wins.toList().forEach { w -> w.bar?.let { runCatching { wm.removeView(it) } }; w.handle?.let { runCatching { wm.removeView(it) } } }
         extra.values.forEach { runCatching { wm.removeView(it) } }; extra.clear()
@@ -366,7 +382,7 @@ private fun OverlayUI(
                     listOf(
                         listOf("ram" to "Bersihkan RAM", "dnd" to "Jangan Ganggu", "shot" to "Screenshot"),
                         listOf("rec" to "Rekam Layar", "hud" to "Monitor", "xh" to "Crosshair"),
-                        listOf("clk" to "Jam Gaming")
+                        listOf("clk" to "Jam Gaming", "split" to "Bagi layar")
                     ).forEach { row ->
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             row.forEach { (k, l) -> MiniBtn(l, Modifier.weight(1f)) { onTool(k) } }
@@ -381,8 +397,10 @@ private fun OverlayUI(
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             row.forEach { (k, l) ->
                                 MiniBtn(l, Modifier.weight(1f).background(if (mini == k) Color(0x552B7BFF) else Color.Transparent)) {
-                                    mini = if (mini == k) null else k
-                                    onFocus(mini == "notes" || mini == "web")
+                                    if (k == "web") onTool("browser") else {
+                                        mini = if (mini == k) null else k
+                                        onFocus(mini == "notes")
+                                    }
                                 }
                             }
                         }

@@ -372,7 +372,7 @@ fun WindowScreen(haze: HazeState, shizuku: Boolean, overlay: Boolean) {
         Glass(Modifier.fillMaxWidth(), haze) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("3. Nyalakan fitur jendela mengambang", color = C.Text, fontWeight = FontWeight.SemiBold)
-                Text("Mengaktifkan freeform window di sistem. Di Android 16 kadang perlu restart HP sekali.", color = C.Dim, fontSize = 12.sp)
+                Text("Mode Overlay (bawaan) tidak butuh Freeform. Tombol ini hanya untuk mode Freeform Android; kadang perlu restart HP sekali.", color = C.Dim, fontSize = 12.sp)
                 BigButton("Aktifkan Freeform") {
                     if (!shizuku) msg = "Aktifkan Shizuku dulu"
                     else scope.launch(Dispatchers.IO) { Freeform.enable(); msg = "Freeform diaktifkan. Coba buka app dari tab Aplikasi." }

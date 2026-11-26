@@ -258,6 +258,8 @@ fun SettingsScreen(haze: HazeState, shizuku: Boolean) {
     var xhColor by remember { mutableIntStateOf(prefs.xhColor) }
     var xhSize by remember { mutableFloatStateOf(prefs.xhSize.toFloat()) }
     var winSize by remember { mutableIntStateOf(prefs.winSize) }
+    var engineSel by remember { mutableIntStateOf(prefs.engine) }
+    var killClose by remember { mutableStateOf(prefs.killOnClose) }
     var walls by remember { mutableStateOf(DataPack.walls(ctx)) }
     var dlMsg by remember { mutableStateOf("") }
     var sounds by remember { mutableStateOf(DataPack.sounds(ctx)) }
@@ -356,6 +358,18 @@ fun SettingsScreen(haze: HazeState, shizuku: Boolean) {
                 }
                 if (dlMsg.isNotEmpty()) Text(dlMsg, color = C.Cyan, fontSize = 12.sp)
                 Text("Data diunduh ke HP ini dari GitHub Release (perlu internet).", color = C.Dim, fontSize = 12.sp)
+            }
+        }
+        Glass(Modifier.fillMaxWidth(), haze) {
+            Section("Mesin jendela mengambang") {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Chip("Overlay (disarankan)", engineSel == 0) { engineSel = 0; prefs.engine = 0 }
+                    Chip("Freeform Android", engineSel == 1) { engineSel = 1; prefs.engine = 1 }
+                }
+                Chip(if (killClose) "Hentikan app saat jendela ditutup: AKTIF" else "Hentikan app saat jendela ditutup: MATI", killClose) {
+                    killClose = !killClose; prefs.killOnClose = killClose
+                }
+                Text("Overlay: app jalan di layar virtual, selalu di atas game dan tidak memunculkan tombol navigasi. Freeform: jendela asli Android, bisa tertutup game.", color = C.Dim, fontSize = 12.sp)
             }
         }
         Glass(Modifier.fillMaxWidth(), haze) {

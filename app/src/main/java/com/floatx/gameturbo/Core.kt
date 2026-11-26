@@ -82,8 +82,16 @@ fun Freeform.launchBounds(ctx: Context, pkg: String, r: android.graphics.Rect): 
             id = line?.let { Regex("#(\\d+)").find(it)?.groupValues?.get(1)?.toIntOrNull() } ?: -1
         }
     }
-    if (id > 0) Shell.run("am task resize $id ${r.left},${r.top},${r.right},${r.bottom}")
+    if (id > 0) Freeform.resize(id, r)
     return id
+}
+
+/** Android 14+ memakai format 4 argumen terpisah (LEFT TOP RIGHT BOTTOM); format lama pakai koma. Coba keduanya. */
+fun Freeform.resize(id: Int, r: android.graphics.Rect): String {
+    val a = Shell.run("am task resize $id ${r.left} ${r.top} ${r.right} ${r.bottom}")
+    if (a.isBlank()) return ""
+    val b = Shell.run("am task resize $id ${r.left},${r.top},${r.right},${r.bottom}")
+    return if (b.isBlank()) "" else a
 }
 
 object Tools {
@@ -140,6 +148,12 @@ class Prefs(ctx: Context) {
     var safe: Boolean
         get() = sp.getBoolean("safe", false)
         set(v) { sp.edit().putBoolean("safe", v).apply() }
+    var engine: Int
+        get() = sp.getInt("eng", 0)
+        set(v) { sp.edit().putInt("eng", v).apply() }
+    var killOnClose: Boolean
+        get() = sp.getBoolean("kill", true)
+        set(v) { sp.edit().putBoolean("kill", v).apply() }
     var note: String
         get() = sp.getString("note", "")!!
         set(v) { sp.edit().putString("note", v).apply() }

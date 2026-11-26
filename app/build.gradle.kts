@@ -12,13 +12,14 @@ android {
         applicationId = "com.floatx.gameturbo"
         minSdk = 29
         targetSdk = 35
-        versionCode = 9
-        versionName = "1.5.2"
+        versionCode = 11
+        versionName = "1.6.0"
         buildConfigField("String", "DATA_URL", "\"$dataUrl\"")
     }
     buildFeatures {
         compose = true
         buildConfig = true
+        aidl = true
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
